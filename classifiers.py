@@ -64,11 +64,13 @@ X_train, X_test, y_train, y_test = train_test_split(x.drop('label',axis=1),
 
 logmodel = LogisticRegression(solver='liblinear', C=10.0, random_state=0)
 logmodel.fit(X_train, y_train)
-#filename = "modello_farlocco.joblib"
-#joblib.dump(logmodel, filename)
+filename = "logistic_regression_model.joblib"
+joblib.dump(logmodel, filename)
 
 rf = RandomForestClassifier(n_estimators = 1000, random_state = 42)
 rf.fit(X_train, y_train)
+filename = "random_forest_model.joblib"
+joblib.dump(logmodel, filename)
 
 # ------------------------------------------ evaluation logistic regression ------------------------------------------
 p_pred = logmodel.predict_proba(X_test)
@@ -102,5 +104,3 @@ plt.show()
 metrics.plot_roc_curve(rf, X_test, y_test)
 plt.show()
 
-plt.scatter(residuals, y_pred)
-plt.show()
