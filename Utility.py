@@ -83,9 +83,9 @@ def scrappy(client, post_url, result_limit):
 #   - run_users: raw data of user's profile 
 def data_2_csv(client, users):
     # Create the data that will be written in the CSV
-    headers = ['username', 'number_followers', 'number_following', 'number_videos', 'number_posts', 
-    'number_characters_username', 'number_characters_fullname', 'number_digits_username', 
-    'non_alpha_chars_fullname', 'is_private', 'is_verified', 'is_business', 'has_url']
+    headers = ['username', 'follower_num', 'following_num', 'number_videos', 'edge_owner_to_timeline_media', 
+    'username_len', 'fullname_len', 'Digits_in_username', 'bio_len',
+    'Number_of_nonalphabetic_in_fullname', 'is_private', 'is_verified', 'is_business_account', 'Has_external_url']
     data = []
     for item in client.dataset(users["defaultDatasetId"]).iterate_items():
         row = [None] * 13
@@ -97,11 +97,12 @@ def data_2_csv(client, users):
         row[5] = len(item['username'])
         row[6] = len(item['fullName'])
         row[7] = sum(c.isdigit() for c in item['username'])
+        row[8] = sum(c.isdigit() for c in item['bio'])
         row[8] = str(item['fullName']).count(r'[^a-zA-Z0-9 ]')
         row[9] = item['private']
         row[10] = item['verified']
         row[11] = item['isBusinessAccount']
-        row[12] = True if item['externalUrl'] != False else False
+        row[12] = True if item['externalUrl'] else False
 
         data.append(row)
 
