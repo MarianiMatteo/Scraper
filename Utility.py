@@ -1,4 +1,14 @@
 import csv
+import joblib
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn import datasets, metrics, model_selection, svm
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from statsmodels.graphics.mosaicplot import mosaic
+from sklearn.metrics import classification_report, confusion_matrix, plot_roc_curve,roc_auc_score, roc_curve, accuracy_score
 
 
 # -------------------------------------------- Scrappy --------------------------------------------
@@ -83,26 +93,32 @@ def scrappy(client, post_url, result_limit):
 #   - run_users: raw data of user's profile 
 def data_2_csv(client, users):
     # Create the data that will be written in the CSV
-    headers = ['username', 'follower_num', 'following_num', 'number_videos', 'edge_owner_to_timeline_media', 
-    'username_len', 'fullname_len', 'Digits_in_username', 'bio_len',
-    'Number_of_nonalphabetic_in_fullname', 'is_private', 'is_verified', 'is_business_account', 'Has_external_url']
+    headers = ['username','follower_num', 'following_num', 'is_private', 'is_verified', 'has_clips','highlight_reel_count', 'is_business_account', 'edge_felix_video_timeline', 'edge_owner_to_timeline_media', 'username_len', 'fullname_len', 'bio_len', 'Digits_in_username',  'Number_of_nonalphabetic_in_fullname', 'Number_of_HashtagsMentions','Has_external_url', 'Has_business_category_name', 'Has_category_enum', 'Has_category_name']
     data = []
     for item in client.dataset(users["defaultDatasetId"]).iterate_items():
-        row = [None] * 13
+        row = [None] * 20
         row[0] = item['username']
         row[1] = item['followersCount']
         row[2] = item['followsCount']
-        row[3] = item['igtvVideoCount']
-        row[4] = item['postsCount']
-        row[5] = len(item['username'])
-        row[6] = len(item['fullName'])
-        row[7] = sum(c.isdigit() for c in item['username'])
-        row[8] = sum(c.isdigit() for c in item['bio'])
-        row[8] = str(item['fullName']).count(r'[^a-zA-Z0-9 ]')
-        row[9] = item['private']
-        row[10] = item['verified']
-        row[11] = item['isBusinessAccount']
-        row[12] = True if item['externalUrl'] else False
+        row[3] = item['private']
+        row[4] = item['verified']
+        row[5] = False if item['igtvVideoCount'] == 0 and item['highlightReelCount'] == 0 else True
+        row[6] = item['highlightReelCount']
+        row[7] = item['isBusinessAccount']
+        row[8] = item['igtvVideoCount']
+        row[9] = item['postsCount']
+        row[10] = len(item['username'])
+        row[11] = len(item['fullName'])
+        row[12] = len(item['biography'])
+        row[13] = sum(c.isdigit() for c in item['username'])
+        row[14] = str(item['fullName']).count(r'[^a-zA-Z0-9 ]')
+        hashtag_mentions = item['biography'].count('#')
+        hashtag_mentions += item['biography'].count('@')
+        row[15] = hashtag_mentions
+        row[16] = False if item['externalUrl'] == None else True
+        row[17] = True if item['businessCategoryName'] else False
+        row[18] = True if item['businessCategoryName'] else False
+        row[19] = True if item['businessCategoryName'] else False
 
         data.append(row)
 
@@ -143,4 +159,19 @@ def scrappy_automator(file, client, result_limit):
     return post_urls
 
 
+def detect_fake_accounts():
+    random_forest = joblib.load('random_forest_model.joblib')
+
+    dataset = pd.read_csv('dataset_users.csv')
+    column_usernames = ['username']
+    usernames = dataset.loc[:,column_usernames]
+    dataset = dataset.drop(columns=['username'])
+
+    predictions = random_forest.predict(dataset)
+
+    for i in range(len(predictions)):
+        if predictions[i] == 0:
+            print(usernames.loc[[i]])
+
+            
 
