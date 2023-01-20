@@ -1,4 +1,5 @@
 import csv
+import json
 import joblib
 import numpy as np
 import pandas as pd
@@ -11,11 +12,18 @@ from statsmodels.graphics.mosaicplot import mosaic
 from sklearn.metrics import classification_report, confusion_matrix, plot_roc_curve,roc_auc_score, roc_curve, accuracy_score
 
 
+def print_dictionary(dictionary):
+    for key, value in dictionary.items():
+        print(key, ' : ', value)
+
 # -------------------------------------------- Scrappy --------------------------------------------
+def prepare_for_scraping():
+    open('comments.txt', 'w').close()
+
 # Function that execute the scraping
 # INPUT:
 #   - post_url: url of the choosen post (String)
-#   - result_limit: limit on the number of comments that need to be scraped (int)
+#   - result_limit: limit on the number of comments that need to be scraped (int)
 # OUTPUT:
 #   - run_users: raw data of user's profile 
 def scrappy(client, post_url, result_limit):
@@ -49,8 +57,11 @@ def scrappy(client, post_url, result_limit):
 
     commenters = []
     # Fetch and print actor results from the run's dataset (if there are any)
-    for item in client.dataset(run_commenti["defaultDatasetId"]).iterate_items():
-        commenters.append(item['ownerUsername']) if item['ownerUsername'] not in commenters else commenters
+    with open('comments.txt','a') as f:
+        for item in client.dataset(run_commenti["defaultDatasetId"]).iterate_items():
+            f.write(json.dumps(item))
+            f.write('\n')
+            commenters.append(item['ownerUsername']) if item['ownerUsername'] not in commenters else commenters
 
     # Create the urls needed to fetch data of the users
     directUrls = []
@@ -95,32 +106,33 @@ def data_2_csv(client, users):
     # Create the data that will be written in the CSV
     headers = ['username','follower_num', 'following_num', 'is_private', 'is_verified', 'has_clips','highlight_reel_count', 'is_business_account', 'edge_felix_video_timeline', 'edge_owner_to_timeline_media', 'username_len', 'fullname_len', 'bio_len', 'Digits_in_username',  'Number_of_nonalphabetic_in_fullname', 'Number_of_HashtagsMentions','Has_external_url', 'Has_business_category_name', 'Has_category_enum', 'Has_category_name']
     data = []
-    for item in client.dataset(users["defaultDatasetId"]).iterate_items():
-        row = [None] * 20
-        row[0] = item['username']
-        row[1] = item['followersCount']
-        row[2] = item['followsCount']
-        row[3] = item['private']
-        row[4] = item['verified']
-        row[5] = False if item['igtvVideoCount'] == 0 and item['highlightReelCount'] == 0 else True
-        row[6] = item['highlightReelCount']
-        row[7] = item['isBusinessAccount']
-        row[8] = item['igtvVideoCount']
-        row[9] = item['postsCount']
-        row[10] = len(item['username'])
-        row[11] = len(item['fullName'])
-        row[12] = len(item['biography'])
-        row[13] = sum(c.isdigit() for c in item['username'])
-        row[14] = str(item['fullName']).count(r'[^a-zA-Z0-9 ]')
-        hashtag_mentions = item['biography'].count('#')
-        hashtag_mentions += item['biography'].count('@')
-        row[15] = hashtag_mentions
-        row[16] = False if item['externalUrl'] == None else True
-        row[17] = True if item['businessCategoryName'] else False
-        row[18] = True if item['businessCategoryName'] else False
-        row[19] = True if item['businessCategoryName'] else False
+    for user in users:
+        for item in client.dataset(user["defaultDatasetId"]).iterate_items():
+            row = [None] * 20
+            row[0] = item['username']
+            row[1] = item['followersCount']
+            row[2] = item['followsCount']
+            row[3] = item['private']
+            row[4] = item['verified']
+            row[5] = False if item['igtvVideoCount'] == 0 and item['highlightReelCount'] == 0 else True
+            row[6] = item['highlightReelCount']
+            row[7] = item['isBusinessAccount']
+            row[8] = item['igtvVideoCount']
+            row[9] = item['postsCount']
+            row[10] = len(item['username'])
+            row[11] = len(item['fullName'])
+            row[12] = len(item['biography'])
+            row[13] = sum(c.isdigit() for c in item['username'])
+            row[14] = str(item['fullName']).count(r'[^a-zA-Z0-9 ]')
+            hashtag_mentions = item['biography'].count('#')
+            hashtag_mentions += item['biography'].count('@')
+            row[15] = hashtag_mentions
+            row[16] = False if item['externalUrl'] == None else True
+            row[17] = True if item['businessCategoryName'] else False
+            row[18] = True if item['businessCategoryName'] else False
+            row[19] = True if item['businessCategoryName'] else False
 
-        data.append(row)
+            data.append(row)
 
     # Write the CSV
     with open('dataset_users.csv', 'w', encoding='UTF8', newline='') as f:
@@ -153,8 +165,7 @@ def scrappy_automator(file, client, result_limit):
         users_info.append(scrappy(client, url, result_limit))
     
     #convert to csv
-    for user_info in users_info:
-        data_2_csv(client, user_info)
+    data_2_csv(client, users_info)
 
     return post_urls
 
@@ -169,9 +180,24 @@ def detect_fake_accounts():
 
     predictions = random_forest.predict(dataset)
 
-    for i in range(len(predictions)):
-        if predictions[i] == 0:
-            print(usernames.loc[[i]])
+    fake_comments = {}
+    number_fake_comments = 0
+    with open('comments.txt', 'r') as f:
+        for comment in f:
+            comment = json.loads(comment)
+            for i in range(len(predictions)):
+                if predictions[i] == 0:
+                    if comment['ownerUsername'] == usernames.loc[i].at['username']:
+                        if comment['ownerUsername'] not in fake_comments:
+                            fake_comments[comment['ownerUsername']] = [comment['text']]
+                            number_fake_comments += 1
+                        else:
+                            fake_comments[comment['ownerUsername']].append(comment['text'])
+                            number_fake_comments += 1
 
-            
+    print('Commenti falsi:')
+    print_dictionary(fake_comments)
+    total_comments = len(dataset.index)
+    print()
+    print('Percentuale di fake engagement: ', (number_fake_comments / total_comments) * 100, '%')
 

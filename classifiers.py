@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import scikitplot as skplt
 from sklearn import datasets, metrics, model_selection, svm
 from sklearn.linear_model import LogisticRegression
 import joblib
@@ -82,7 +83,7 @@ report = classification_report(y_test, y_pred)
 print('Score of the logistic regression: ', score)
 print(report)
 
-plot_confusion_matrix(conf_m, 'logistic regression')
+skplt.metrics.plot_confusion_matrix(y_test, y_pred, normalize=False, title='Confusion Matrix for Logistic Regression')
 plt.show()
 
 metrics.plot_roc_curve(logmodel, X_test, y_test)
@@ -98,9 +99,17 @@ report_forest = classification_report(y_test, y_pred_forest)
 print('Score of the random forest', score_forest)
 print(report_forest)
 
-plot_confusion_matrix(conf_m_forest, 'random forest')
+# graph of the confusion matrix
+skplt.metrics.plot_confusion_matrix(y_test, y_pred_forest, normalize=False, title='Confusion Matrix for Random Forest')
 plt.show()
 
+# plot roc curve and auc
 metrics.plot_roc_curve(rf, X_test, y_test)
+plt.show()
+
+# print predictions plot
+scatterplot_dataset = X_test
+scatterplot_dataset['predictions'] = y_pred_forest
+sns.scatterplot(data=scatterplot_dataset, x="follower_num", y="following_num", hue="predictions").set(title='Predictions')
 plt.show()
 
