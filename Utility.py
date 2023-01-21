@@ -144,7 +144,7 @@ def scrappy(client, post_url, result_limit):
 #   - result_limit: limit on the number of comments that need to be scraped (int)
 # OUTPUT:
 #   - run_users: raw data of user's profile 
-def data_2_csv(client, users):
+def data_2_csv(client, users, likers):
     # Create the data that will be written in the CSV
     headers = ['username','follower_num', 'following_num', 'is_private', 'is_verified', 'has_clips','highlight_reel_count', 'is_business_account', 'edge_felix_video_timeline', 'edge_owner_to_timeline_media', 'username_len', 'fullname_len', 'bio_len', 'Digits_in_username',  'Number_of_nonalphabetic_in_fullname', 'Number_of_HashtagsMentions','Has_external_url', 'Has_business_category_name', 'Has_category_enum', 'Has_category_name']
     data = []
@@ -176,11 +176,41 @@ def data_2_csv(client, users):
 
             data.append(row)
 
-    # Write the CSV
-    with open('dataset_users.csv', 'w', encoding='UTF8', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(headers)
-        writer.writerows(data)
+    if likers:
+        # Write the CSV for likers
+        with open('dataset_likers.csv', 'w', encoding='UTF8', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(headers)
+            writer.writerows(data)
+    else:
+        # Write the CSV for commenters
+        with open('dataset_commmenters.csv', 'w', encoding='UTF8', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(headers)
+            writer.writerows(data)
+
+
+# -------------------------------------------- Likerz --------------------------------------------
+
+# Function that read the file containing the likers
+# INPUT:
+#   - file: csv file containing the likers
+# OUTPUT:
+#   - likers_urls: list of likers' urls  
+def read_likers_csv(file):
+    likers_urls = []
+    with open(file, 'r') as likers_info:
+        csv_reader = csv.reader(likers_info, delimiter=',')
+        # lo so, non è bello da vedere, ma csv_reader è un oggetto csv.reader
+        # e non so come altro saltare il primo elemento
+        i = 0
+        for row in csv_reader:
+            if i == 0:
+                i+=1
+            else:
+                likers_urls.append(row[0]+'/')
+
+    return likers_urls
 
 # -------------------------------------------- Scrappy automator --------------------------------------------
 
@@ -189,10 +219,10 @@ def data_2_csv(client, users):
 #   - file: text file with urls divided by comma or newline
 # OUTPUT:
 #   - links: python list of post urls
-def scrappy_automator(file, client, result_limit):
+def scrappy_automator(commenters_file, likers_file, client, commenters_limit, likers_limit):
     #list of post_urls
     post_urls = []
-    with open(file, 'r') as f:
+    with open(commenters_file, 'r') as f:
         lines = f.readlines()
         for line in lines:
             # if any "\n" remove it
@@ -201,13 +231,20 @@ def scrappy_automator(file, client, result_limit):
             post_urls.append(line)
     f.close
     
-    # scrape all
+    # commenters info
     users_info = []
     for url in post_urls:
-        users_info.append(scrappy(client, url, result_limit))
+        users_info.append(scrappy(client, url, commenters_limit))
+
+    # likers info
+    likers_info = []
+    likers_urls = read_likers_csv(likers_file)
+    for liker_url in likers_urls:
+        likers_info.append(scrappy(client, liker_url, likers_limit))
     
     #convert to csv
-    data_2_csv(client, users_info)
+    data_2_csv(client, users_info, False)
+    data_2_csv(client, likers_info, True)
 
     return post_urls
 
