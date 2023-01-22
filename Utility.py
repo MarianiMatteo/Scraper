@@ -295,105 +295,127 @@ def detect_fake_accounts():
 
         predictions = random_forest.predict(dataset)
 
-        fake_comments = {}
-        fake_comments_emojis = {}
-        true_comments = {}
-        true_comments_emojis = {}
-        translator = Translator()
-        number_fake_comments = 0
-        with open('comments.txt', 'r') as f:
-            for comment in f:
-                comment = json.loads(comment)
-                for i in range(len(predictions)):
-                    # se il profilo è segnamato come falso
-                    if predictions[i] == 0:
-                        # se il commento che sto guardando corrisponde al nome presente nelle predizioni
-                        if comment['ownerUsername'] == usernames.loc[i].at['username']:
-                            # se il commentatore non è già stato inserito nel dizionario
-                            if comment['ownerUsername'] not in fake_comments:
-                                # translate the comment in english
-                                translated_comment = translator.translate(comment['text'],dest='en').text
-                                # extract emojis from the comment
-                                emojis = extract_emojis(translated_comment)
-                                for emoji in emojis:
-                                    if emoji not in fake_comments_emojis:
-                                        fake_comments_emojis[emoji] = 1
-                                    else:
-                                        fake_comments_emojis[emoji] += 1
-                                # insert the comment in the final dictionary
-                                fake_comments[comment['ownerUsername']] = [translated_comment]
-                                # increment the number of comments found
-                                number_fake_comments += 1
+        # ------------ Commenters section ------------
+        if file_input == 'dataset_commmenters.csv':
+            fake_comments = {}
+            fake_comments_emojis = {}
+            true_comments = {}
+            true_comments_emojis = {}
+            translator = Translator()
+            number_fake_comments = 0
+            with open('comments.txt', 'r') as f:
+                for comment in f:
+                    comment = json.loads(comment)
+                    for i in range(len(predictions)):
+                        # se il profilo è segnamato come falso
+                        if predictions[i] == 0:
+                            # se il commento che sto guardando corrisponde al nome presente nelle predizioni
+                            if comment['ownerUsername'] == usernames.loc[i].at['username']:
+                                # se il commentatore non è già stato inserito nel dizionario
+                                if comment['ownerUsername'] not in fake_comments:
+                                    # translate the comment in english
+                                    translated_comment = translator.translate(comment['text'],dest='en').text
+                                    # extract emojis from the comment
+                                    emojis = extract_emojis(translated_comment)
+                                    for emoji in emojis:
+                                        if emoji not in fake_comments_emojis:
+                                            fake_comments_emojis[emoji] = 1
+                                        else:
+                                            fake_comments_emojis[emoji] += 1
+                                    # insert the comment in the final dictionary
+                                    fake_comments[comment['ownerUsername']] = [translated_comment]
+                                    # increment the number of comments found
+                                    number_fake_comments += 1
 
-                            # se il commentatore era presente nel dizionario
-                            else:
-                                translated_comment = translator.translate(comment['text'],dest='en').text
-                                emojis = extract_emojis(translated_comment)
-                                for emoji in emojis:
-                                    if emoji not in fake_comments_emojis:
-                                        fake_comments_emojis[emoji] = 1
-                                    else:
-                                        fake_comments_emojis[emoji] += 1
+                                # se il commentatore era presente nel dizionario
+                                else:
+                                    translated_comment = translator.translate(comment['text'],dest='en').text
+                                    emojis = extract_emojis(translated_comment)
+                                    for emoji in emojis:
+                                        if emoji not in fake_comments_emojis:
+                                            fake_comments_emojis[emoji] = 1
+                                        else:
+                                            fake_comments_emojis[emoji] += 1
 
-                                fake_comments[comment['ownerUsername']].append(translated_comment)
-                                number_fake_comments += 1
-                    # se il profilo è segnalato come vero
-                    else:
-                        if comment['ownerUsername'] == usernames.loc[i].at['username']:
-                            if comment['ownerUsername'] not in true_comments:
-                                translated_comment = translator.translate(comment['text'],dest='en').text
-                                emojis = extract_emojis(translated_comment)
-                                for emoji in emojis:
-                                    if emoji not in true_comments_emojis:
-                                        true_comments_emojis[emoji] = 1
-                                    else:
-                                        true_comments_emojis[emoji] += 1
+                                    fake_comments[comment['ownerUsername']].append(translated_comment)
+                                    number_fake_comments += 1
+                        # se il profilo è segnalato come vero
+                        else:
+                            if comment['ownerUsername'] == usernames.loc[i].at['username']:
+                                if comment['ownerUsername'] not in true_comments:
+                                    translated_comment = translator.translate(comment['text'],dest='en').text
+                                    emojis = extract_emojis(translated_comment)
+                                    for emoji in emojis:
+                                        if emoji not in true_comments_emojis:
+                                            true_comments_emojis[emoji] = 1
+                                        else:
+                                            true_comments_emojis[emoji] += 1
 
-                                true_comments[comment['ownerUsername']] = [translated_comment]
-                            elif comment['ownerUsername'] in true_comments and translator.translate(comment['text'],dest='en').text not in true_comments[comment['ownerUsername']]:
-                                translated_comment = translator.translate(comment['text'],dest='en').text
-                                emojis = extract_emojis(translated_comment)
-                                for emoji in emojis:
-                                    if emoji not in true_comments_emojis:
-                                        true_comments_emojis[emoji] = 1
-                                    else:
-                                        true_comments_emojis[emoji] += 1
+                                    true_comments[comment['ownerUsername']] = [translated_comment]
+                                elif comment['ownerUsername'] in true_comments and translator.translate(comment['text'],dest='en').text not in true_comments[comment['ownerUsername']]:
+                                    translated_comment = translator.translate(comment['text'],dest='en').text
+                                    emojis = extract_emojis(translated_comment)
+                                    for emoji in emojis:
+                                        if emoji not in true_comments_emojis:
+                                            true_comments_emojis[emoji] = 1
+                                        else:
+                                            true_comments_emojis[emoji] += 1
 
-                                true_comments[comment['ownerUsername']].append(translated_comment)
+                                    true_comments[comment['ownerUsername']].append(translated_comment)
 
 
-        #print('Commenti falsi:')
-        #print_dictionary(fake_comments)
-        #print()
-        #print('Commenti veri:')
-        #print_dictionary(true_comments)
-        #print()
-        total_comments = len(dataset.index)
-        print('-------------------------------------------------------------------')
-        print('LEGENDA SENTIMENT:')
-        print('In un intorno di 0 -> generalmente neutrale \nMaggiore di zero -> generalmente positivo \nTendente ad uno -> molto positivo \nMinore di zero -> generalmente negativo \nTendente a meno uno -> molto negativo \n')
-        print('Sentiment utenti crowdturfing: ', get_sentiment(fake_comments))
-        print()
-        print('Sentiment utenti reali: ', get_sentiment(true_comments))
-        print()
-        print('Sentiment emoji utenti crowdturfing: ', round(get_emoji_sentiment(fake_comments_emojis),2))
-        print()
-        print('Sentiment emoji utenti reali: ', round(get_emoji_sentiment(true_comments_emojis),2))
-        print()
-        print('-------------------------------------------------------------------')
-        print('Percentuale di fake engagement: ', (number_fake_comments / total_comments) * 100, '%')
-        print()
-        print('Percentuale di engagement reale: ', (1 - (number_fake_comments / total_comments)) * 100, '%')
-        print()
-        print('-------------------------------------------------------------------')
-        print('Topics:')
-        print(get_topic_from_comments(fake_comments))
-        print('-------------------------------------------------------------------')
-        print('Most used emojis by crowdturfing accounts')
-        fake_comments_emojis = {k: v for k, v in sorted(fake_comments_emojis.items(), key=lambda item: item[1])}
-        print_dictionary_last_n(fake_comments_emojis, 5)
-        print()
-        print('Most used emojis by real accounts')
-        true_comments_emojis = {k: v for k, v in sorted(true_comments_emojis.items(), key=lambda item: item[1])}
-        print_dictionary_last_n({k: v for k, v in sorted(true_comments_emojis.items(), key=lambda item: item[1])}, 5)
-        print('-------------------------------------------------------------------')
+            #print('Commenti falsi:')
+            #print_dictionary(fake_comments)
+            #print()
+            #print('Commenti veri:')
+            #print_dictionary(true_comments)
+            #print()
+            total_comments = len(dataset.index)
+            print('-------------------------------- COMMENTERS --------------------------------')
+            print()
+            print('Numero totale likers: ', )
+            print()
+            print('Numero di fake account: ', )
+            print('LEGENDA SENTIMENT:')
+            print('In un intorno di 0 -> generalmente neutrale \nMaggiore di zero -> generalmente positivo \nTendente ad uno -> molto positivo \nMinore di zero -> generalmente negativo \nTendente a meno uno -> molto negativo \n')
+            print('Sentiment utenti crowdturfing: ', get_sentiment(fake_comments))
+            print()
+            print('Sentiment utenti reali: ', get_sentiment(true_comments))
+            print()
+            print('Sentiment emoji utenti crowdturfing: ', round(get_emoji_sentiment(fake_comments_emojis),2))
+            print()
+            print('Sentiment emoji utenti reali: ', round(get_emoji_sentiment(true_comments_emojis),2))
+            print()
+            print('-------------------------------------------------------------------')
+            print('Percentuale di fake engagement: ', (number_fake_comments / total_comments) * 100, '%')
+            print()
+            print('Percentuale di engagement reale: ', (1 - (number_fake_comments / total_comments)) * 100, '%')
+            print()
+            print('-------------------------------------------------------------------')
+            print('Topics:')
+            print(get_topic_from_comments(fake_comments))
+            print('-------------------------------------------------------------------')
+            print('Most used emojis by crowdturfing accounts')
+            fake_comments_emojis = {k: v for k, v in sorted(fake_comments_emojis.items(), key=lambda item: item[1])}
+            print_dictionary_last_n(fake_comments_emojis, 5)
+            print()
+            print('Most used emojis by real accounts')
+            true_comments_emojis = {k: v for k, v in sorted(true_comments_emojis.items(), key=lambda item: item[1])}
+            print_dictionary_last_n({k: v for k, v in sorted(true_comments_emojis.items(), key=lambda item: item[1])}, 5)
+            print('-------------------------------------------------------------------')
+
+        # ------------ Likers section ------------
+        else:
+
+            print()
+            print('-------------------------------- LIKERS --------------------------------')
+            print('Numero totale likers: ', )
+            print()
+            print('Numero di fake account: ', )
+            print()
+            print('-------------------------------------------------------------------')
+            print('Percentuale di fake engagement: ', (number_fake_comments / total_comments) * 100, '%')
+            print()
+            print('Percentuale di engagement reale: ', (1 - (number_fake_comments / total_comments)) * 100, '%')
+            print()
+            print('-------------------------------------------------------------------')
