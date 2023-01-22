@@ -1,3 +1,4 @@
+import re
 import csv
 import json
 import emoji
@@ -8,6 +9,9 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from statistics import mean
 from googletrans import Translator
+from gensim import corpora, models
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
 from emosent import get_emoji_sentiment_rank
 from nltk.sentiment import SentimentIntensityAnalyzer
 from sklearn import datasets, metrics, model_selection, svm
@@ -57,6 +61,37 @@ def get_emoji_sentiment(dict_emoji):
             continue
 
     return mean(scores)
+
+
+def get_topic_from_comments(dict_comments):
+    list_of_list_of_tokens = []
+    stop_words = set(stopwords.words('english'))
+    for commenter, comments in dict_comments.items():
+        for comment in comments:
+            word_tokens = word_tokenize(comment)
+            filtered_sentence = [w for w in word_tokens if not w.lower() in stop_words and w.isalnum()]
+            if len(filtered_sentence) > 0:
+                list_of_list_of_tokens.extend(filtered_sentence)
+
+    list_of_list_of_tokens = [list_of_list_of_tokens]
+
+    dictionary = corpora.Dictionary(list_of_list_of_tokens)
+    doc_term_matrix = [dictionary.doc2bow(doc) for doc in list_of_list_of_tokens]
+    lda_model = models.LdaModel(doc_term_matrix,   ## Document Term Matrix
+                                   num_topics = 5,     ## Number of Topics
+                                   id2word = dictionary,     ## Word and Frequency Dictionary                                
+                                   passes = 10,        ## Number of passes throw the corpus during training (similar to epochs in neural networks)
+                                   chunksize=10,       ## Number of documents to be used in each training chunk
+                                   update_every=1,     ## Number of documents to be iterated through for each update.
+                                   alpha='auto',       ## number of expected topics that expresses
+                                   per_word_topics=True,
+                                   random_state=42)
+    
+    ### Exploring Common Words For Each Topic With Their Relative Words
+    for idx, topic in lda_model.print_topics():
+        print("Topic: {} \nWords: {}".format(idx, topic ))
+        print("\n")
+
 
 # -------------------------------------------- Scrappy --------------------------------------------
 def prepare_for_scraping():
@@ -349,6 +384,9 @@ def detect_fake_accounts():
     print()
     print('Percentuale di engagement reale: ', (1 - (number_fake_comments / total_comments)) * 100, '%')
     print()
+    print('-------------------------------------------------------------------')
+    print('Topics:')
+    print(get_topic_from_comments(fake_comments))
     print('-------------------------------------------------------------------')
     print('Most used emojis by crowdturfing accounts')
     fake_comments_emojis = {k: v for k, v in sorted(fake_comments_emojis.items(), key=lambda item: item[1])}
