@@ -3,6 +3,7 @@ import csv
 import json
 import emoji
 import joblib
+import requests
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -21,6 +22,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from statsmodels.graphics.mosaicplot import mosaic
 from sklearn.metrics import classification_report, confusion_matrix, plot_roc_curve,roc_auc_score, roc_curve, accuracy_score
+from requests.structures import CaseInsensitiveDict
 
 
 def print_dictionary(dictionary):
@@ -165,74 +167,75 @@ def prepare_for_scraping():
 # INPUT:
 #   - post_url: url of the choosen post (String)
 #   - result_limit: limit on the number of comments that need to be scraped (int)
+#   - likers_or_commenters: 0 if likers 1 if commenters
 # OUTPUT:
 #   - run_users: raw data of user's profile 
-def scrappy(client, post_url, result_limit):
+def scrappy(api_key, post_url, likers_or_commenters):
     # Initialize the ApifyClient with your API token
     # TI PREGO METTI LA TUA API KEY SENNO MI SI BEVONO TUTTI I CREDITI GRATIS
-    # api token fra: apify_api_CV1KyT7LXglO43g6YtQHvl9t2cdhmD3kRm9h
-    # api token m: apify_api_sK0VFtrbVbixtUIQasaJj46H6MbWFL2jitER
+    # api token fra: wPwOdnZVjBJwwbIa6dVFlcLr24mF1UmNt2ho0gGZ3GRZmG9uq5OkCbIcDL87WvW3dd6wqevxPexI8e2dDhYsdY8CngpFGaLzqelg9k5YzY52koi1SKXXtyzZGwZuyJAC
+    # api token m: RLO6Tv1phmwCUdyUIBKxlNUw52lEUNue8INBv1cYtcr1Xj2FazsnOxpWo0M9tpKFqm8Lk15Ule0LdfxLHDtogi8pwDKLx7RT8oOIp1i8AeF1rlwdU2wtn94asFAK0MUz
+
+    content = ""
+    # likers case
+    if likers_or_commenters == 0:
+        content = "reactions"
+    #commenters case
+    else:
+        content = "comments"
+
+    slug = post_url.split('/')[4]
+    url = "https://api.zembra.io/social/instagram/post/"+slug+"/"+content
+
+    headers = CaseInsensitiveDict()
+    headers["Accept"] = "application/json"
+    headers["Authorization"] = "Bearer " + api_key
+
+    resp = requests.get(url, headers=headers)
+
+    if likers_or_commenters == 0:
+        file_name = "likers"
+    else:
+        file_name = "commmenters"
+   
+    with open(file_name + ".json", "w") as outfile:
+        json.dump(resp.json(), outfile)
     
-    # Prepare the actor input
-    run_input_commenti = {
-        "directUrls": [post_url],
-        "resultsType": "comments",
-        "resultsLimit": result_limit,
-        "searchType": "hashtag",
-        "searchLimit": 1,
-        "proxy": {
-            "useApifyProxy": True,
-            "apifyProxyGroups": ["RESIDENTIAL"],
-        },
-        "extendOutputFunction": """async ({ data, item, helpers, page, customData, label }) => {
-    return item;
-    }""",
-        "extendScraperFunction": """async ({ page, request, label, response, helpers, requestQueue, logins, addProfile, addPost, addLocation, addHashtag, doRequest, customData, Apify }) => {
+
+    profile_usernames = []
+    if likers_or_commenters == 0:
+        for commenter in resp['data']['reactions']:
+            profile_usernames.append(commenter["username"])
+    else:
+        for commenter in resp['data']['comments']:
+            profile_usernames.append(commenter["user"])
     
-    }""",
-        "customData": {},
-    }
+    users_info = []
+    for username in profile_usernames:
+        users_info.append(scrape_user_info(username, api_key))
 
-    # Run the actor and wait for it to finish
-    run_commenti = client.actor("jaroslavhejlek/instagram-scraper").call(run_input=run_input_commenti)
-
-    commenters = []
-    # Fetch and print actor results from the run's dataset (if there are any)
-    with open('comments.txt','a') as f:
-        for item in client.dataset(run_commenti["defaultDatasetId"]).iterate_items():
-            f.write(json.dumps(item))
-            f.write('\n')
-            commenters.append(item['ownerUsername']) if item['ownerUsername'] not in commenters else commenters
-
-    # Create the urls needed to fetch data of the users
-    directUrls = []
-    for commenter in commenters:
-        directUrls.append('https://www.instagram.com/' + commenter + '/') 
-
-    # Prepare the actor's input
-    run_input_users = {
-        "directUrls": directUrls,
-        "resultsType": "details",
-        "resultsLimit": 200,
-        "searchType": "hashtag",
-        "searchLimit": 1,
-        "proxy": {
-            "useApifyProxy": True,
-            "apifyProxyGroups": ["RESIDENTIAL"],
-        },
-        "extendOutputFunction": """async ({ data, item, helpers, page, customData, label }) => {
-    return item;
-    }""",
-        "extendScraperFunction": """async ({ page, request, label, response, helpers, requestQueue, logins, addProfile, addPost, addLocation, addHashtag, doRequest, customData, Apify }) => {
     
-    }""",
-        "customData": {},
-    }
+    # # Fetch and print actor results from the run's dataset (if there are any)
+    # with open('comments.txt','a') as f:
+    #     for item in client.dataset(run_commenti["defaultDatasetId"]).iterate_items():
+    #         f.write(json.dumps(item))
+    #         f.write('\n')
+    #         commenters.append(item['ownerUsername']) if item['ownerUsername'] not in commenters else commenters
 
-    # Run the actor
-    run_users = client.actor("jaroslavhejlek/instagram-scraper").call(run_input=run_input_users)
 
-    return run_users
+
+
+def scrape_user_info(username, api_key):
+
+    url = "https://api.zembra.io/social/instagram/user/"+username+"/posts"
+
+    headers = CaseInsensitiveDict()
+    headers["Accept"] = "application/json"
+    headers["Authorization"] = "Bearer "+ api_key
+
+    response = requests.get(url, headers=headers)
+    response.json()
+
 
 
 # -------------------------------------------- data2csv --------------------------------------------
@@ -318,10 +321,10 @@ def read_likers_csv(file):
 #   - file: text file with urls divided by comma or newline
 # OUTPUT:
 #   - links: python list of post urls
-def scrappy_automator(commenters_file, likers_file, client, commenters_limit, likers_limit):
+def scrappy_automator(urls_post_file, api_key, commenters_limit, likers_limit):
     #list of post_urls
     post_urls = []
-    with open(commenters_file, 'r') as f:
+    with open(urls_post_file, 'r') as f:
         lines = f.readlines()
         for line in lines:
             # if any "\n" remove it
@@ -330,20 +333,19 @@ def scrappy_automator(commenters_file, likers_file, client, commenters_limit, li
             post_urls.append(line)
     f.close
     
-    # commenters info
-    users_info = []
+    # scraping
+    users_comments_info = []
+    users_likes_info = []
     for url in post_urls:
-        users_info.append(scrappy(client, url, commenters_limit))
+        users_comments_info.append(scrappy(api_key, url, 1))
+        users_likes_info.append(scrappy(api_key, url, 0))
+    
+    print("------------------------------- Likers")
 
-    # likers info
-    likers_info = []
-    likers_urls = read_likers_csv(likers_file)
-    for liker_url in likers_urls:
-        likers_info.append(scrappy(client, liker_url, likers_limit))
     
     #convert to csv
-    data_2_csv(client, users_info, False)
-    data_2_csv(client, likers_info, True)
+    #data_2_csv(client, users_comments_info, False)
+    #data_2_csv(client, users_likes_info, True)
 
     return post_urls
 
