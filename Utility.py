@@ -8,6 +8,8 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from statistics import mean
+from Comment import Comment
+from datetime import datetime
 from googletrans import Translator
 from gensim import corpora, models
 from nltk.corpus import stopwords
@@ -35,6 +37,10 @@ def extract_emojis(s):
     return ''.join(c for c in s if c in emoji.EMOJI_DATA)
 
 
+def orderTime(oggetto):
+    return oggetto.timestamp
+
+
 def get_sentiment(comments):
     scores = []
     sia = SentimentIntensityAnalyzer()
@@ -47,6 +53,67 @@ def get_sentiment(comments):
 
     
     return mean(scores)
+
+
+def get_sentiment_graph(comments_list):
+    true_comments_list = []
+    false_comments_list = []
+    x = range(0,len(comments_list))
+    y_scores_true = []
+    y_scores_false = []
+    y_scores = []
+    comments_so_far = []
+    true_comments_so_far = []
+    false_comments_so_far = []
+    sia = SentimentIntensityAnalyzer()
+    
+    for comment in comments_list:
+        comment.timestamp = pd.to_datetime(comment.timestamp, infer_datetime_format=True)
+
+    comments_list.sort(key=orderTime)
+    for comment_list in comments_list:
+        comments_so_far.append(comment_list.text)
+
+        if comment_list.category == 'crowdturfing':
+            false_comments_list.append(comment_list)
+        else:
+            true_comments_list.append(comment_list)
+
+        scores_so_far = []
+        for comment in comments_so_far:
+            scores_so_far.append(sia.polarity_scores(comment)['compound'])
+
+        y_scores.append(sum(scores_so_far)/len(scores_so_far))
+
+    for comment_list in false_comments_list:
+        false_comments_so_far.append(comment_list.text)
+        scores_so_far = []
+        for comment in false_comments_so_far:
+            scores_so_far.append(sia.polarity_scores(comment)['compound'])
+
+        y_scores_false.append(sum(scores_so_far)/len(scores_so_far))
+
+    x_scores_false = range(0, len(false_comments_list))
+
+    for comment_list in true_comments_list:
+        true_comments_so_far.append(comment_list.text)
+        scores_so_far = []
+        for comment in true_comments_so_far:
+            scores_so_far.append(sia.polarity_scores(comment)['compound'])
+
+        y_scores_true.append(sum(scores_so_far)/len(scores_so_far))
+
+    x_scores_true = range(0, len(true_comments_list))
+
+    fig, axs = plt.subplots(ncols=3)
+    fig.suptitle('Sentiment over time')
+    axs[0].plot(x, y_scores)
+    axs[0].set_title('Overall sentiment')
+    axs[1].plot(x_scores_true, y_scores_true)
+    axs[1].set_title('True sentiment')
+    axs[2].plot(x_scores_false, y_scores_false)
+    axs[2].set_title('Crowdturfing Sentiment')
+    plt.show()
 
 
 def get_emoji_sentiment(dict_emoji):
@@ -87,10 +154,7 @@ def get_topic_from_comments(dict_comments):
                                    per_word_topics=True,
                                    random_state=42)
     
-    ### Exploring Common Words For Each Topic With Their Relative Words
-    for idx, topic in lda_model.print_topics():
-        print("Topic: {} \nWords: {}".format(idx, topic ))
-        print("\n")
+    return lda_model.print_topics()
 
 
 # -------------------------------------------- Scrappy --------------------------------------------
@@ -302,6 +366,7 @@ def detect_fake_accounts():
             true_comments = {}
             true_comments_emojis = {}
             translator = Translator()
+            comments_list = []
             number_fake_comments = 0
             with open('comments.txt', 'r') as f:
                 for comment in f:
@@ -326,6 +391,7 @@ def detect_fake_accounts():
                                     fake_comments[comment['ownerUsername']] = [translated_comment]
                                     # increment the number of comments found
                                     number_fake_comments += 1
+                                    comments_list.append(Comment('crowdturfing', translated_comment, comment['timestamp']))
 
                                 # se il commentatore era presente nel dizionario
                                 else:
@@ -339,6 +405,7 @@ def detect_fake_accounts():
 
                                     fake_comments[comment['ownerUsername']].append(translated_comment)
                                     number_fake_comments += 1
+                                    comments_list.append(Comment('crowdturfing', translated_comment, comment['timestamp']))
                         # se il profilo è segnalato come vero
                         else:
                             if comment['ownerUsername'] == usernames.loc[i].at['username']:
@@ -352,6 +419,8 @@ def detect_fake_accounts():
                                             true_comments_emojis[emoji] += 1
 
                                     true_comments[comment['ownerUsername']] = [translated_comment]
+                                    comments_list.append(Comment('true', translated_comment, comment['timestamp']))
+
                                 elif comment['ownerUsername'] in true_comments and translator.translate(comment['text'],dest='en').text not in true_comments[comment['ownerUsername']]:
                                     translated_comment = translator.translate(comment['text'],dest='en').text
                                     emojis = extract_emojis(translated_comment)
@@ -362,6 +431,7 @@ def detect_fake_accounts():
                                             true_comments_emojis[emoji] += 1
 
                                     true_comments[comment['ownerUsername']].append(translated_comment)
+                                    comments_list.append(Comment('true', translated_comment, comment['timestamp']))
 
 
             #print('Commenti falsi:')
@@ -372,10 +442,15 @@ def detect_fake_accounts():
             #print()
             total_comments = len(dataset.index)
             print('-------------------------------- COMMENTERS --------------------------------')
-            print()
             print('Numero totale commenters: ', total_comments )
             print()
-            print('Numero di fake account: ', number_fake_comments)
+            print('Numero totale di commenter veri: ', len(true_comments))
+            print()
+            print('Numero totale di commenter falsi: ', len(fake_comments))
+            print()
+            print('Numero di commenti veri: ', total_comments-number_fake_comments)
+            print()
+            print('Numero di commenti falsi: ', number_fake_comments)
             print()
             print('LEGENDA SENTIMENT:')
             print('In un intorno di 0 -> generalmente neutrale \nMaggiore di zero -> generalmente positivo \nTendente ad uno -> molto positivo \nMinore di zero -> generalmente negativo \nTendente a meno uno -> molto negativo \n')
@@ -387,14 +462,22 @@ def detect_fake_accounts():
             print()
             print('Sentiment emoji utenti reali: ', round(get_emoji_sentiment(true_comments_emojis),2))
             print()
+            get_sentiment_graph(comments_list)
             print('-------------------------------------------------------------------')
-            print('Percentuale di fake engagement: ', (number_fake_comments / total_comments) * 100, '%')
+            print('Percentuale di fake engagement (basata sui commenti): ', (number_fake_comments / total_comments) * 100, '%')
             print()
-            print('Percentuale di engagement reale: ', (1 - (number_fake_comments / total_comments)) * 100, '%')
+            print('Percentuale di engagement reale (basata sui commenti): ', (1 - (number_fake_comments / total_comments)) * 100, '%')
             print()
-            print('-------------------------------------------------------------------')
-            print('Topics:')
-            print(get_topic_from_comments(fake_comments))
+            print('Percentuale di fake engagement (basata sui commenter): ', (len(fake_comments) / (len(fake_comments) + len(true_comments))) *100,'%')
+            print()
+            print('Percentuale di engagement reale (basata sui commenter): ', (len(true_comments) / (len(fake_comments) + len(true_comments))) *100,'%')
+            #topics = get_topic_from_comments(fake_comments)
+            #print('-------------------------------------------------------------------')
+            #print('Topics:')
+            #for idx, topic in topics:
+            #    print("Topic: {} \nWords: {}".format(idx, topic ))
+            #
+            #print()
             print('-------------------------------------------------------------------')
             print('Most used emojis by crowdturfing accounts')
             fake_comments_emojis = {k: v for k, v in sorted(fake_comments_emojis.items(), key=lambda item: item[1])}

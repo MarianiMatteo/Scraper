@@ -1,0 +1,11 @@
+-model	DMM
+-corpus	/Users/francescopenna/Desktop/AT-CNS/progetto/Scraper/STTM/dataset/Tweet.txt
+-ntopics	89
+-alpha	0.1
+-beta	0.1
+-niters	50
+-twords	20
+-name	DMM-Tweet-5
+-initiation time	9.0
+-one iteration time	24.9
+-total time	1254.0
