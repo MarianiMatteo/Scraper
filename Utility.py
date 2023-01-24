@@ -38,6 +38,20 @@ def print_dictionary_last_n(dictionary, n):
 def extract_emojis(s):
     return ''.join(c for c in s if c in emoji.EMOJI_DATA)
 
+def give_emoji_free_text(text):
+    allchars = [str for str in text]
+    emoji_list = [c for c in allchars if c in emoji.EMOJI_DATA]
+    clean_text = ' '.join([str for str in text.split() if not any(i in str for i in emoji_list)])
+        
+    return clean_text
+
+def give_emoji_free_text(text):
+    allchars = [str for str in text]
+    emoji_list = [c for c in allchars if c in emoji.EMOJI_DATA]
+    clean_text = ' '.join([str for str in text.split() if not any(i in str for i in emoji_list)])
+        
+    return clean_text
+
 
 def orderTime(oggetto):
     return oggetto.timestamp
@@ -53,14 +67,12 @@ def get_sentiment(comments):
 
         scores.append(mean(score_user))
 
-    
     return mean(scores)
 
 
 def get_sentiment_graph(comments_list):
     true_comments_list = []
     false_comments_list = []
-    x = range(0,len(comments_list))
     y_scores_true = []
     y_scores_false = []
     y_scores = []
@@ -68,9 +80,23 @@ def get_sentiment_graph(comments_list):
     true_comments_so_far = []
     false_comments_so_far = []
     sia = SentimentIntensityAnalyzer()
-    
+
     for comment in comments_list:
         comment.timestamp = pd.to_datetime(comment.timestamp, infer_datetime_format=True)
+        comment.text = give_emoji_free_text(comment.text)
+        if len(comment.text) == 0:
+            comment.to_remove = True
+
+    i = 0
+    while i < len(comments_list):
+        if comments_list[i].to_remove == True:
+            comments_list.pop(i)
+        i+=1
+
+    x = range(0,len(comments_list))
+    comments_list = list(filter(lambda item: item is not None, comments_list))
+    for comment in comments_list:
+        print(comment.get_comment())
 
     comments_list.sort(key=orderTime)
     for comment_list in comments_list:
@@ -162,6 +188,8 @@ def get_topic_from_comments(dict_comments):
 # -------------------------------------------- Scrappy --------------------------------------------
 def prepare_for_scraping():
     open('comments.txt', 'w').close()
+    open('likers.json', 'w').close()
+    open('commenters.json', 'w').close()
 
 # Function that execute the scraping
 # INPUT:
@@ -170,7 +198,7 @@ def prepare_for_scraping():
 #   - likers_or_commenters: 0 if likers 1 if commenters
 # OUTPUT:
 #   - run_users: raw data of user's profile 
-def scrappy(api_key, post_url, likers_or_commenters):
+def scrappy(api_key, client, post_url, likers_or_commenters, debug=False):
     # Initialize the ApifyClient with your API token
     # TI PREGO METTI LA TUA API KEY SENNO MI SI BEVONO TUTTI I CREDITI GRATIS
     # api token fra: wPwOdnZVjBJwwbIa6dVFlcLr24mF1UmNt2ho0gGZ3GRZmG9uq5OkCbIcDL87WvW3dd6wqevxPexI8e2dDhYsdY8CngpFGaLzqelg9k5YzY52koi1SKXXtyzZGwZuyJAC
@@ -191,51 +219,60 @@ def scrappy(api_key, post_url, likers_or_commenters):
     headers["Accept"] = "application/json"
     headers["Authorization"] = "Bearer " + api_key
 
-    resp = requests.get(url, headers=headers)
+    if debug == False:
+        resp = requests.get(url, headers=headers)
 
     if likers_or_commenters == 0:
         file_name = "likers"
     else:
-        file_name = "commmenters"
+        file_name = "commenters"
    
-    with open(file_name + ".json", "w") as outfile:
-        json.dump(resp.json(), outfile)
+    if debug == False:
+        with open(file_name + ".json", "a") as outfile:
+            json.dump(resp.json(), outfile)
     
-
-    profile_usernames = []
-    if likers_or_commenters == 0:
-        for commenter in resp['data']['reactions']:
-            profile_usernames.append(commenter["username"])
+    if debug:
+        profile_usernames = []
+        with open('commenters.json', 'r') as file_json:
+            data = json.load(file_json)
+        for commenter in data['data']['comments']:
+            profile_usernames.append(commenter["user"]) if commenter["user"] not in profile_usernames else profile_usernames
     else:
-        for commenter in resp['data']['comments']:
-            profile_usernames.append(commenter["user"])
+        profile_usernames = []
+        if likers_or_commenters == 0:
+            for commenter in resp.json()['data']['reactions']:
+                profile_usernames.append(commenter["username"]) if commenter["user"] not in profile_usernames else profile_usernames
+        else:
+            for commenter in resp.json()['data']['comments']:
+                profile_usernames.append(commenter["user"]) if commenter["user"] not in profile_usernames else profile_usernames
     
-    users_info = []
+    directUrls = []
     for username in profile_usernames:
-        users_info.append(scrape_user_info(username, api_key))
+        directUrls.append('https://www.instagram.com/' + username + '/') 
 
+    run_input_users = {
+        "directUrls": directUrls,
+        "resultsType": "details",
+        "resultsLimit": 200,
+        "searchType": "hashtag",
+        "searchLimit": 1,
+        "proxy": {
+            "useApifyProxy": True,
+            "apifyProxyGroups": ["RESIDENTIAL"],
+        },
+        "extendOutputFunction": """async ({ data, item, helpers, page, customData, label }) => {
+    return item;
+    }""",
+        "extendScraperFunction": """async ({ page, request, label, response, helpers, requestQueue, logins, addProfile, addPost, addLocation, addHashtag, doRequest, customData, Apify }) => {
     
-    # # Fetch and print actor results from the run's dataset (if there are any)
-    # with open('comments.txt','a') as f:
-    #     for item in client.dataset(run_commenti["defaultDatasetId"]).iterate_items():
-    #         f.write(json.dumps(item))
-    #         f.write('\n')
-    #         commenters.append(item['ownerUsername']) if item['ownerUsername'] not in commenters else commenters
+    }""",
+        "customData": {},
+    }
 
+    # Run the actor
+    run_users = client.actor("jaroslavhejlek/instagram-scraper").call(run_input=run_input_users)
 
-
-
-def scrape_user_info(username, api_key):
-
-    url = "https://api.zembra.io/social/instagram/user/"+username+"/posts"
-
-    headers = CaseInsensitiveDict()
-    headers["Accept"] = "application/json"
-    headers["Authorization"] = "Bearer "+ api_key
-
-    response = requests.get(url, headers=headers)
-    response.json()
-
+    return run_users
 
 
 # -------------------------------------------- data2csv --------------------------------------------
@@ -321,7 +358,7 @@ def read_likers_csv(file):
 #   - file: text file with urls divided by comma or newline
 # OUTPUT:
 #   - links: python list of post urls
-def scrappy_automator(urls_post_file, api_key, commenters_limit, likers_limit):
+def scrappy_automator(urls_post_file, api_key, client):
     #list of post_urls
     post_urls = []
     with open(urls_post_file, 'r') as f:
@@ -337,15 +374,12 @@ def scrappy_automator(urls_post_file, api_key, commenters_limit, likers_limit):
     users_comments_info = []
     users_likes_info = []
     for url in post_urls:
-        users_comments_info.append(scrappy(api_key, url, 1))
-        users_likes_info.append(scrappy(api_key, url, 0))
-    
-    print("------------------------------- Likers")
+        users_comments_info.append(scrappy(api_key, client, url, 1, True))
+        users_likes_info.append(scrappy(api_key, client, url, 0, True))
 
-    
     #convert to csv
-    #data_2_csv(client, users_comments_info, False)
-    #data_2_csv(client, users_likes_info, True)
+    data_2_csv(client, users_comments_info, False)
+    data_2_csv(client, users_likes_info, True)
 
     return post_urls
 
@@ -353,7 +387,7 @@ def scrappy_automator(urls_post_file, api_key, commenters_limit, likers_limit):
 def detect_fake_accounts():
     random_forest = joblib.load('random_forest_model.joblib')
 
-    for file_input in ['dataset_commmenters.csv', 'dataset_likers.csv']:
+    for file_input in ['dataset_commmenters.csv']:#, 'dataset_likers.csv']:
         dataset = pd.read_csv(file_input)
         column_usernames = ['username']
         usernames = dataset.loc[:,column_usernames]
@@ -370,16 +404,16 @@ def detect_fake_accounts():
             translator = Translator()
             comments_list = []
             number_fake_comments = 0
-            with open('comments.txt', 'r') as f:
-                for comment in f:
-                    comment = json.loads(comment)
+            with open('commenters.json', 'r') as file_json:
+                comments = json.load(file_json)
+                for comment in comments['data']['comments']:
                     for i in range(len(predictions)):
                         # se il profilo è segnamato come falso
                         if predictions[i] == 0:
                             # se il commento che sto guardando corrisponde al nome presente nelle predizioni
-                            if comment['ownerUsername'] == usernames.loc[i].at['username']:
+                            if comment['rawData']['owner']['username'] == usernames.loc[i].at['username']:
                                 # se il commentatore non è già stato inserito nel dizionario
-                                if comment['ownerUsername'] not in fake_comments:
+                                if comment['rawData']['owner']['username'] not in fake_comments:
                                     # translate the comment in english
                                     translated_comment = translator.translate(comment['text'],dest='en').text
                                     # extract emojis from the comment
@@ -390,7 +424,7 @@ def detect_fake_accounts():
                                         else:
                                             fake_comments_emojis[emoji] += 1
                                     # insert the comment in the final dictionary
-                                    fake_comments[comment['ownerUsername']] = [translated_comment]
+                                    fake_comments[comment['rawData']['owner']['username']] = [translated_comment]
                                     # increment the number of comments found
                                     number_fake_comments += 1
                                     comments_list.append(Comment('crowdturfing', translated_comment, comment['timestamp']))
@@ -405,13 +439,13 @@ def detect_fake_accounts():
                                         else:
                                             fake_comments_emojis[emoji] += 1
 
-                                    fake_comments[comment['ownerUsername']].append(translated_comment)
+                                    fake_comments[comment['rawData']['owner']['username']].append(translated_comment)
                                     number_fake_comments += 1
                                     comments_list.append(Comment('crowdturfing', translated_comment, comment['timestamp']))
                         # se il profilo è segnalato come vero
                         else:
-                            if comment['ownerUsername'] == usernames.loc[i].at['username']:
-                                if comment['ownerUsername'] not in true_comments:
+                            if comment['rawData']['owner']['username'] == usernames.loc[i].at['username']:
+                                if comment['rawData']['owner']['username'] not in true_comments:
                                     translated_comment = translator.translate(comment['text'],dest='en').text
                                     emojis = extract_emojis(translated_comment)
                                     for emoji in emojis:
@@ -420,10 +454,10 @@ def detect_fake_accounts():
                                         else:
                                             true_comments_emojis[emoji] += 1
 
-                                    true_comments[comment['ownerUsername']] = [translated_comment]
+                                    true_comments[comment['rawData']['owner']['username']] = [translated_comment]
                                     comments_list.append(Comment('true', translated_comment, comment['timestamp']))
 
-                                elif comment['ownerUsername'] in true_comments and translator.translate(comment['text'],dest='en').text not in true_comments[comment['ownerUsername']]:
+                                elif comment['rawData']['owner']['username'] in true_comments and translator.translate(comment['text'],dest='en').text not in true_comments[comment['rawData']['owner']['username']]:
                                     translated_comment = translator.translate(comment['text'],dest='en').text
                                     emojis = extract_emojis(translated_comment)
                                     for emoji in emojis:
@@ -432,7 +466,7 @@ def detect_fake_accounts():
                                         else:
                                             true_comments_emojis[emoji] += 1
 
-                                    true_comments[comment['ownerUsername']].append(translated_comment)
+                                    true_comments[comment['rawData']['owner']['username']].append(translated_comment)
                                     comments_list.append(Comment('true', translated_comment, comment['timestamp']))
 
 
@@ -442,18 +476,37 @@ def detect_fake_accounts():
             #print('Commenti veri:')
             #print_dictionary(true_comments)
             #print()
+            with open('topics.txt', 'w') as outfile:
+                topics = get_topic_from_comments(fake_comments)
+                outfile.write('Topics of crowdturfing accounts:\n')
+                for idx, topic in topics:
+                    outfile.write("Topic: {} \nWords: {}".format(idx, topic ))
+                    outfile.write("\n")
+                
+                outfile.write('\n')
+                print('\n\n')
+                topics = get_topic_from_comments(true_comments)
+                outfile.write('Topics of true accounts:\n')
+                for idx, topic in topics:
+                    outfile.write("Topic: {} \nWords: {}".format(idx, topic ))
+                    outfile.write("\n")
+                
+                outfile.write('\n')
+
+            print()
             total_comments = len(dataset.index)
             print('-------------------------------- COMMENTERS --------------------------------')
-            print('Numero totale commenters: ', total_comments )
-            print()
-            print('Numero totale di commenter veri: ', len(true_comments))
-            print()
-            print('Numero totale di commenter falsi: ', len(fake_comments))
+            print('Numero totale commenti: ', total_comments )
             print()
             print('Numero di commenti veri: ', total_comments-number_fake_comments)
             print()
             print('Numero di commenti falsi: ', number_fake_comments)
             print()
+            print('Numero totale di commenter veri: ', len(true_comments))
+            print()
+            print('Numero totale di commenter falsi: ', len(fake_comments))
+            print()
+            print('----------------------------------------------------------------------------')
             print('LEGENDA SENTIMENT:')
             print('In un intorno di 0 -> generalmente neutrale \nMaggiore di zero -> generalmente positivo \nTendente ad uno -> molto positivo \nMinore di zero -> generalmente negativo \nTendente a meno uno -> molto negativo \n')
             print('Sentiment utenti crowdturfing: ', get_sentiment(fake_comments))
@@ -465,21 +518,15 @@ def detect_fake_accounts():
             print('Sentiment emoji utenti reali: ', round(get_emoji_sentiment(true_comments_emojis),2))
             print()
             get_sentiment_graph(comments_list)
-            print('-------------------------------------------------------------------')
-            print('Percentuale di fake engagement (basata sui commenti): ', (number_fake_comments / total_comments) * 100, '%')
+            print('---------------------------------------------------------------------------')
+            print('Percentuale di fake engagement (basata sui commenti): ', round(((number_fake_comments / total_comments) * 100),2), '%')
             print()
-            print('Percentuale di engagement reale (basata sui commenti): ', (1 - (number_fake_comments / total_comments)) * 100, '%')
+            print('Percentuale di engagement reale (basata sui commenti): ', round(((1 - (number_fake_comments / total_comments)) * 100),2), '%')
             print()
-            print('Percentuale di fake engagement (basata sui commenter): ', (len(fake_comments) / (len(fake_comments) + len(true_comments))) *100,'%')
+            print('Percentuale di fake engagement (basata sui commenter): ', round(((len(fake_comments) / (len(fake_comments) + len(true_comments))) *100),2),'%')
             print()
-            print('Percentuale di engagement reale (basata sui commenter): ', (len(true_comments) / (len(fake_comments) + len(true_comments))) *100,'%')
-            #topics = get_topic_from_comments(fake_comments)
-            #print('-------------------------------------------------------------------')
-            #print('Topics:')
-            #for idx, topic in topics:
-            #    print("Topic: {} \nWords: {}".format(idx, topic ))
-            #
-            #print()
+            print('Percentuale di engagement reale (basata sui commenter): ', round(((len(true_comments) / (len(fake_comments) + len(true_comments))) *100),2),'%')
+            print()
             print('-------------------------------------------------------------------')
             print('Most used emojis by crowdturfing accounts')
             fake_comments_emojis = {k: v for k, v in sorted(fake_comments_emojis.items(), key=lambda item: item[1])}
@@ -488,8 +535,8 @@ def detect_fake_accounts():
             print('Most used emojis by real accounts')
             true_comments_emojis = {k: v for k, v in sorted(true_comments_emojis.items(), key=lambda item: item[1])}
             print_dictionary_last_n({k: v for k, v in sorted(true_comments_emojis.items(), key=lambda item: item[1])}, 5)
+            print()
             print('-------------------------------------------------------------------')
-
         # ------------ Likers section ------------
         else:
 
