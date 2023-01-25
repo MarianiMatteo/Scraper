@@ -1,3 +1,4 @@
+import os
 import re
 import csv
 import json
@@ -95,8 +96,6 @@ def get_sentiment_graph(comments_list):
 
     x = range(0,len(comments_list))
     comments_list = list(filter(lambda item: item is not None, comments_list))
-    for comment in comments_list:
-        print(comment.get_comment())
 
     comments_list.sort(key=orderTime)
     for comment_list in comments_list:
@@ -233,15 +232,21 @@ def scrappy(api_key, client, post_url, likers_or_commenters, debug=False):
     
     if debug:
         profile_usernames = []
-        with open('commenters.json', 'r') as file_json:
-            data = json.load(file_json)
-        for commenter in data['data']['comments']:
-            profile_usernames.append(commenter["user"]) if commenter["user"] not in profile_usernames else profile_usernames
+        if likers_or_commenters == 0:
+            with open('likers.json', 'r') as file_json:
+                data = json.load(file_json)
+            for commenter in data['data']['reactions']:
+                profile_usernames.append(commenter["username"]) if commenter["username"] not in profile_usernames else profile_usernames
+        else:
+            with open('commenters.json', 'r') as file_json:
+                data = json.load(file_json)
+            for commenter in data['data']['comments']:
+                profile_usernames.append(commenter["user"]) if commenter["user"] not in profile_usernames else profile_usernames
     else:
         profile_usernames = []
         if likers_or_commenters == 0:
             for commenter in resp.json()['data']['reactions']:
-                profile_usernames.append(commenter["username"]) if commenter["user"] not in profile_usernames else profile_usernames
+                profile_usernames.append(commenter["username"]) if commenter["username"] not in profile_usernames else profile_usernames
         else:
             for commenter in resp.json()['data']['comments']:
                 profile_usernames.append(commenter["user"]) if commenter["user"] not in profile_usernames else profile_usernames
@@ -387,7 +392,7 @@ def scrappy_automator(urls_post_file, api_key, client):
 def detect_fake_accounts():
     random_forest = joblib.load('random_forest_model.joblib')
 
-    for file_input in ['dataset_commmenters.csv']:#, 'dataset_likers.csv']:
+    for file_input in ['dataset_commmenters.csv', 'dataset_likers.csv']: 
         dataset = pd.read_csv(file_input)
         column_usernames = ['username']
         usernames = dataset.loc[:,column_usernames]
@@ -469,13 +474,6 @@ def detect_fake_accounts():
                                     true_comments[comment['rawData']['owner']['username']].append(translated_comment)
                                     comments_list.append(Comment('true', translated_comment, comment['timestamp']))
 
-
-            #print('Commenti falsi:')
-            #print_dictionary(fake_comments)
-            #print()
-            #print('Commenti veri:')
-            #print_dictionary(true_comments)
-            #print()
             with open('topics.txt', 'w') as outfile:
                 topics = get_topic_from_comments(fake_comments)
                 outfile.write('Topics of crowdturfing accounts:\n')
@@ -493,7 +491,7 @@ def detect_fake_accounts():
                 
                 outfile.write('\n')
 
-            print()
+            os.system('clear')
             total_comments = len(dataset.index)
             print('-------------------------------- COMMENTERS --------------------------------')
             print('Numero totale commenti: ', total_comments )
@@ -518,7 +516,7 @@ def detect_fake_accounts():
             print('Sentiment emoji utenti reali: ', round(get_emoji_sentiment(true_comments_emojis),2))
             print()
             get_sentiment_graph(comments_list)
-            print('---------------------------------------------------------------------------')
+            print('----------------------------------------------------------------------------')
             print('Percentuale di fake engagement (basata sui commenti): ', round(((number_fake_comments / total_comments) * 100),2), '%')
             print()
             print('Percentuale di engagement reale (basata sui commenti): ', round(((1 - (number_fake_comments / total_comments)) * 100),2), '%')
@@ -527,7 +525,7 @@ def detect_fake_accounts():
             print()
             print('Percentuale di engagement reale (basata sui commenter): ', round(((len(true_comments) / (len(fake_comments) + len(true_comments))) *100),2),'%')
             print()
-            print('-------------------------------------------------------------------')
+            print('----------------------------------------------------------------------------')
             print('Most used emojis by crowdturfing accounts')
             fake_comments_emojis = {k: v for k, v in sorted(fake_comments_emojis.items(), key=lambda item: item[1])}
             print_dictionary_last_n(fake_comments_emojis, 5)
@@ -536,19 +534,29 @@ def detect_fake_accounts():
             true_comments_emojis = {k: v for k, v in sorted(true_comments_emojis.items(), key=lambda item: item[1])}
             print_dictionary_last_n({k: v for k, v in sorted(true_comments_emojis.items(), key=lambda item: item[1])}, 5)
             print()
-            print('-------------------------------------------------------------------')
         # ------------ Likers section ------------
         else:
+            number_true_likers = 0
+            number_fake_likers = 0
+            for i in range(len(predictions)):
+                # se il profilo è segnamato come falso
+                if predictions[i] == 0:
+                    number_fake_likers += 1
+                else:
+                    number_true_likers += 1
 
+            total_likers = number_true_likers + number_fake_likers
+
+            print('--------------------------------- LIKERS -----------------------------------')
+            print('Numero totale likers: ', total_likers)
             print()
-            print('-------------------------------- LIKERS --------------------------------')
-            print('Numero totale likers: ', )
+            print('Numero di fake likers: ', number_fake_likers)
             print()
-            print('Numero di fake account: ', )
+            print('Numero di true likers: ', number_true_likers)
             print()
-            print('-------------------------------------------------------------------')
-            print('Percentuale di fake engagement: ', (number_fake_comments / total_comments) * 100, '%')
+            print('----------------------------------------------------------------------------')
+            print('Percentuale di fake engagement (basata sui like): ', round(((number_fake_likers / total_likers) * 100),2), '%')
             print()
-            print('Percentuale di engagement reale: ', (1 - (number_fake_comments / total_comments)) * 100, '%')
+            print('Percentuale di engagement reale (basata sui like): ', round(((1 - (number_fake_likers / total_likers)) * 100),2), '%')
             print()
-            print('-------------------------------------------------------------------')
+            print('----------------------------------------------------------------------------')
