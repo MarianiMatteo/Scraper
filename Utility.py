@@ -3,6 +3,7 @@ import re
 import csv
 import json
 import emoji
+import shutil
 import joblib
 import requests
 import numpy as np
@@ -18,6 +19,7 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from emosent import get_emoji_sentiment_rank
 from nltk.sentiment import SentimentIntensityAnalyzer
+from nltk.tokenize.treebank import TreebankWordDetokenizer
 from sklearn import datasets, metrics, model_selection, svm
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
@@ -158,30 +160,16 @@ def get_emoji_sentiment(dict_emoji):
 
 
 def get_topic_from_comments(dict_comments):
-    list_of_list_of_tokens = []
     stop_words = set(stopwords.words('english'))
-    for commenter, comments in dict_comments.items():
-        for comment in comments:
-            word_tokens = word_tokenize(comment)
-            filtered_sentence = [w for w in word_tokens if not w.lower() in stop_words and w.isalnum()]
-            if len(filtered_sentence) > 0:
-                list_of_list_of_tokens.extend(filtered_sentence)
-
-    list_of_list_of_tokens = [list_of_list_of_tokens]
-
-    dictionary = corpora.Dictionary(list_of_list_of_tokens)
-    doc_term_matrix = [dictionary.doc2bow(doc) for doc in list_of_list_of_tokens]
-    lda_model = models.LdaModel(doc_term_matrix,   ## Document Term Matrix
-                                   num_topics = 5,     ## Number of Topics
-                                   id2word = dictionary,     ## Word and Frequency Dictionary                                
-                                   passes = 10,        ## Number of passes throw the corpus during training (similar to epochs in neural networks)
-                                   chunksize=10,       ## Number of documents to be used in each training chunk
-                                   update_every=1,     ## Number of documents to be iterated through for each update.
-                                   alpha='auto',       ## number of expected topics that expresses
-                                   per_word_topics=True,
-                                   random_state=42)
-    
-    return lda_model.print_topics()
+    with open('STTM/corpus.txt', 'a') as outfile:
+        for commenter, comments in dict_comments.items():
+            for comment in comments:
+                word_tokens = word_tokenize(comment)
+                filtered_sentence = [w for w in word_tokens if not w.lower() in stop_words and w.isalnum()]
+                filtered_sentence = TreebankWordDetokenizer().detokenize(filtered_sentence)
+                if len(filtered_sentence) > 0:
+                    outfile.write(filtered_sentence)
+                    outfile.write('\n')
 
 
 # -------------------------------------------- Scrappy --------------------------------------------
@@ -474,23 +462,28 @@ def detect_fake_accounts():
                                     true_comments[comment['rawData']['owner']['username']].append(translated_comment)
                                     comments_list.append(Comment('true', translated_comment, comment['timestamp']))
 
-            with open('topics.txt', 'w') as outfile:
-                topics = get_topic_from_comments(fake_comments)
-                outfile.write('Topics of crowdturfing accounts:\n')
-                for idx, topic in topics:
-                    outfile.write("Topic: {} \nWords: {}".format(idx, topic ))
-                    outfile.write("\n")
-                
-                outfile.write('\n')
-                print('\n\n')
-                topics = get_topic_from_comments(true_comments)
-                outfile.write('Topics of true accounts:\n')
-                for idx, topic in topics:
-                    outfile.write("Topic: {} \nWords: {}".format(idx, topic ))
-                    outfile.write("\n")
-                
-                outfile.write('\n')
 
+            open('STTM/corpus.txt', 'w').close()
+            folder = os.getcwd()+'/STTM/results'
+            for filename in os.listdir(folder):
+                file_path = os.path.join(folder, filename)
+                try:
+                    if os.path.isfile(file_path) or os.path.islink(file_path):
+                        os.unlink(file_path)
+                    elif os.path.isdir(file_path):
+                        shutil.rmtree(file_path)
+                except Exception as e:
+                    print('Failed to delete %s. Reason: %s' % (file_path, e))
+
+            get_topic_from_comments(fake_comments)
+            get_topic_from_comments(true_comments)
+            os.chdir(os.getcwd()+'/STTM')
+            os.system('./run.sh')
+            os.chdir('../')
+            # ------------------------------------------------------------------------------------------
+            # QUI IL FILE A CUI DEVI ACCEDERE È 'STTM/results/model.topWords' PER CREARE LA WORDCLOUD
+            # ------------------------------------------------------------------------------------------
+        
             os.system('clear')
             total_comments = len(dataset.index)
             print('-------------------------------- COMMENTERS --------------------------------')
