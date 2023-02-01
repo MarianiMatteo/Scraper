@@ -1,0 +1,16 @@
+-model	GPU_PDMM
+-corpus	corpus.txt
+-ntopics	10
+-alpha	0.1
+-beta	0.01
+-lambda	0.6
+-threshold	0.0
+-weight	0.7
+-filterSize	20
+-niters	1000
+-twords	20
+-	20
+-name	model
+-initiation time	4919.0
+-one iteration time	17.0
+-total time	21919.0
