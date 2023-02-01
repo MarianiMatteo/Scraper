@@ -1,8 +1,0 @@
--model	DMM
--corpus	/Users/francescopenna/Desktop/AT-CNS/progetto/Scraper/STTM/dataset/instagram_comments.txt
--ntopics	89
--alpha	0.1
--beta	0.1
--niters	100
--twords	20
--name	InstagramTopics
