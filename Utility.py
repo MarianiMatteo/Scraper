@@ -24,8 +24,11 @@ from sklearn import datasets, metrics, model_selection, svm
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from statsmodels.graphics.mosaicplot import mosaic
-from sklearn.metrics import classification_report, confusion_matrix, plot_roc_curve,roc_auc_score, roc_curve, accuracy_score
+#from sklearn.metrics import classification_report, confusion_matrix, plot_roc_curve,roc_auc_score, roc_curve, accuracy_score
 from requests.structures import CaseInsensitiveDict
+from wordcloud import WordCloud, STOPWORDS
+import matplotlib.pyplot as plt
+import pandas as pd
 
 
 def print_dictionary(dictionary):
@@ -171,6 +174,37 @@ def get_topic_from_comments(dict_comments):
                     outfile.write(filtered_sentence)
                     outfile.write('\n')
 
+def create_wordcloud(path):
+        
+    stopwords = set(STOPWORDS)
+    
+    lines = []
+    text = ""
+
+    with open(path) as f:
+        lines = f.readlines()
+    
+    for line in lines:
+        text_list = line.split(" ")
+        for wrd in text_list:
+            if wrd != "\n":
+                text = text + " " + wrd.lower()
+    
+
+    wordcloud = WordCloud(width = 800, height = 800,
+                    background_color ='white',
+                    stopwords = stopwords,
+                    min_font_size = 10).generate(text)
+    
+    # plot the WordCloud image                      
+    plt.figure(figsize = (6, 6), facecolor = None)
+    plt.imshow(wordcloud)
+    plt.axis("off")
+    plt.tight_layout(pad = 2)
+    
+    #save as png
+    plt.savefig("word_cloud.png") 
+    plt.show()
 
 # -------------------------------------------- Scrappy --------------------------------------------
 def prepare_for_scraping():
@@ -480,9 +514,11 @@ def detect_fake_accounts():
             os.chdir(os.getcwd()+'/STTM')
             os.system('./run.sh')
             os.chdir('../')
+
             # ------------------------------------------------------------------------------------------
             # QUI IL FILE A CUI DEVI ACCEDERE È 'STTM/results/model.topWords' PER CREARE LA WORDCLOUD
             # ------------------------------------------------------------------------------------------
+            create_wordcloud('STTM/results/model.topWords')
         
             os.system('clear')
             total_comments = len(dataset.index)
