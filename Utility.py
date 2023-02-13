@@ -138,15 +138,25 @@ def get_sentiment_graph(comments_list):
     x_scores_true = range(0, len(true_comments_list))
 
     fig, axs = plt.subplots(ncols=3)
+    
     fig.suptitle('Sentiment over time')
     axs[0].plot(x, y_scores)
     axs[0].set_title('Overall sentiment')
+    plt.sca(axs[0])
+    plt.yticks(np.arange(-1.0,1.1, 0.4))
     axs[1].plot(x_scores_true, y_scores_true)
     axs[1].set_title('True sentiment')
+    plt.sca(axs[1])
+    plt.yticks(np.arange(-1.0,1.1, 0.4))
     axs[2].plot(x_scores_false, y_scores_false)
     axs[2].set_title('Crowdturfing Sentiment')
-    plt.show()
+    plt.sca(axs[2])
+    plt.yticks(np.arange(-1.0,1.1, 0.4))
 
+    for ax in axs.flat:
+        ax.set(xlabel='Number of comments',ylabel='Sentiment')
+
+    plt.show()
 
 def get_emoji_sentiment(dict_emoji):
     scores = []
@@ -257,21 +267,24 @@ def scrappy(api_key, client, post_url, likers_or_commenters, debug=False):
         if likers_or_commenters == 0:
             with open('likers.json', 'r') as file_json:
                 data = json.load(file_json)
-            for commenter in data['data']['reactions']:
-                profile_usernames.append(commenter["username"]) if commenter["username"] not in profile_usernames else profile_usernames
+                if "reactions" in data["data"].keys():
+                    for commenter in data['data']['reactions']:
+                        profile_usernames.append(commenter["username"]) if commenter["username"] not in profile_usernames else profile_usernames
         else:
             with open('commenters.json', 'r') as file_json:
                 data = json.load(file_json)
-            for commenter in data['data']['comments']:
-                profile_usernames.append(commenter["user"]) if commenter["user"] not in profile_usernames else profile_usernames
+                if "comments" in data["data"].keys():
+                    for commenter in data['data']['comments']:
+                        profile_usernames.append(commenter["user"]) if commenter["user"] not in profile_usernames else profile_usernames
     else:
         profile_usernames = []
         if likers_or_commenters == 0:
             for commenter in resp.json()['data']['reactions']:
                 profile_usernames.append(commenter["username"]) if commenter["username"] not in profile_usernames else profile_usernames
         else:
-            for commenter in resp.json()['data']['comments']:
-                profile_usernames.append(commenter["user"]) if commenter["user"] not in profile_usernames else profile_usernames
+            if "comments" in resp.json()["data"].keys():
+                for commenter in resp.json()['data']['comments']:
+                    profile_usernames.append(commenter["user"]) if commenter["user"] not in profile_usernames else profile_usernames
     
     directUrls = []
     for username in profile_usernames:
@@ -401,6 +414,7 @@ def scrappy_automator(urls_post_file, api_key, client):
     users_comments_info = []
     users_likes_info = []
     for url in post_urls:
+
         users_comments_info.append(scrappy(api_key, client, url, 1, True))
         users_likes_info.append(scrappy(api_key, client, url, 0, True))
 
@@ -416,14 +430,22 @@ def detect_fake_accounts():
 
     for file_input in ['dataset_commmenters.csv', 'dataset_likers.csv']: 
         dataset = pd.read_csv(file_input)
+        if file_input == 'dataset_commmenters.csv' and len(dataset) == 0:
+            print("--------------------------------- NO COMMENTS UNDER THIS POST ---------------------------------")
+            continue
+        elif file_input == 'dataset_likers.csv' and len(dataset) == 0:
+            print("--------------------------------- NO LIKES UNDER THIS POST ---------------------------------")
+            break
         column_usernames = ['username']
         usernames = dataset.loc[:,column_usernames]
         dataset = dataset.drop(columns=['username'])
+        print(len(dataset))
 
         predictions = random_forest.predict(dataset)
 
         # ------------ Commenters section ------------
         if file_input == 'dataset_commmenters.csv':
+
             fake_comments = {}
             fake_comments_emojis = {}
             true_comments = {}
