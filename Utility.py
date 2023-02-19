@@ -230,10 +230,6 @@ def prepare_for_scraping():
 # OUTPUT:
 #   - run_users: raw data of user's profile 
 def scrappy(api_key, client, post_url, likers_or_commenters, debug=False):
-    # Initialize the ApifyClient with your API token
-    # TI PREGO METTI LA TUA API KEY SENNO MI SI BEVONO TUTTI I CREDITI GRATIS
-    # api token fra: wPwOdnZVjBJwwbIa6dVFlcLr24mF1UmNt2ho0gGZ3GRZmG9uq5OkCbIcDL87WvW3dd6wqevxPexI8e2dDhYsdY8CngpFGaLzqelg9k5YzY52koi1SKXXtyzZGwZuyJAC
-    # api token m: RLO6Tv1phmwCUdyUIBKxlNUw52lEUNue8INBv1cYtcr1Xj2FazsnOxpWo0M9tpKFqm8Lk15Ule0LdfxLHDtogi8pwDKLx7RT8oOIp1i8AeF1rlwdU2wtn94asFAK0MUz
 
     content = ""
     # likers case
@@ -537,9 +533,6 @@ def detect_fake_accounts():
             os.system('./run.sh')
             os.chdir('../')
 
-            # ------------------------------------------------------------------------------------------
-            # QUI IL FILE A CUI DEVI ACCEDERE È 'STTM/results/model.topWords' PER CREARE LA WORDCLOUD
-            # ------------------------------------------------------------------------------------------
             create_wordcloud('STTM/results/model.topWords')
         
             os.system('clear')
