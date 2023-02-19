@@ -229,6 +229,7 @@ def prepare_for_scraping():
 #   - likers_or_commenters: 0 if likers 1 if commenters
 # OUTPUT:
 #   - run_users: raw data of user's profile 
+# Note that debug mode allows you to test the code on an already present dataset
 def scrappy(api_key, client, post_url, likers_or_commenters, debug=False):
 
     content = ""
@@ -411,8 +412,8 @@ def scrappy_automator(urls_post_file, api_key, client):
     users_likes_info = []
     for url in post_urls:
 
-        users_comments_info.append(scrappy(api_key, client, url, 1, True))
-        users_likes_info.append(scrappy(api_key, client, url, 0, True))
+        users_comments_info.append(scrappy(api_key, client, url, 1))
+        users_likes_info.append(scrappy(api_key, client, url, 0))
 
     #convert to csv
     data_2_csv(client, users_comments_info, False)
